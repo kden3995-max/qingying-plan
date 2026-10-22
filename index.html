@@ -22,6 +22,7 @@
     @media(max-width:680px){.adaptive-form{grid-template-columns:1fr 1fr}.adaptive-form button{grid-column:1/-1}.check-options{grid-template-columns:1fr 1fr}.results .detail-card{padding:20px}.week{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:390px){.check-options{grid-template-columns:1fr}.adaptive-form{grid-template-columns:1fr}}
   </style>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="shell">
@@ -57,12 +58,54 @@
         </div>
       </div>
       <div class="below">
-        <section class="card panel" id="week"><div class="panel-head"><div><div class="section-kicker">03 / 日常安排</div><h2>这一周，可以这样过</h2><p class="subtle" id="week-intro">从轻量活动开始；身体适应后再增加时间。</p></div></div><div class="week" id="week-grid"></div><div class="habits"><div class="habit"><i>①</i><b>好好吃饭</b>按自己的偏好搭配蔬菜、蛋白质和主食。</div><div class="habit"><i>②</i><b>给身体恢复时间</b>不适或疲劳时先减量，别硬撑。</div><div class="habit"><i>③</i><b>看趋势，不盯单日</b>尽量在相近时间称重，留意长期变化。</div></div></section>
-        <section class="card panel" id="record"><div class="section-kicker">04 / 留下记录</div><h2>体重变化与感受</h2><p class="subtle">记录体重，再说说这周的感受，计划会据此调整。</p><div class="tracker-form" id="record-form" role="group" aria-label="记录体重"><input type="date" id="record-date" aria-label="记录日期" autocomplete="off" required><input type="number" id="record-weight" aria-label="体重，千克" min="30" max="300" step="0.1" placeholder="体重 kg" required inputmode="decimal" autocomplete="off"><button id="add-record" type="button">记录</button></div><p class="error" id="record-error" role="alert"></p><div class="chart-box" id="chart" aria-label="体重变化图"></div><div class="entries" id="entries"></div><div id="checkin-form" class="adaptive-form" role="group" aria-label="本周感受"><label>疲劳感<select name="fatigue"><option value="low">不明显</option><option value="medium">有一点</option><option value="high">很疲劳</option></select></label><label>饥饿感<select name="hunger"><option value="low">不明显</option><option value="medium">有一点</option><option value="high">经常很饿</option></select></label><label>计划完成情况<select name="completion"><option value="high">大多完成</option><option value="medium">完成一半</option><option value="low">很难完成</option></select></label><button id="update-checkin" type="button">调整建议</button></div><div class="adapt-note" id="adapt-note" aria-live="polite">记录两周以上的体重并填写感受后，可以获得更贴近当前状态的调整建议。</div><button class="clear-session" id="clear-session" type="button">退出并清空本页</button><p class="privacy">资料和记录仅在当前页面暂存。刷新、关闭或离开后再打开，都会从示例数据开始；此页不会保存你的健康信息。</p></section>
+        <section class="card panel" id="week" aria-labelledby="week-title">
+          <div class="panel-head"><div><div class="section-kicker">03 / 日常安排</div><h2 id="week-title">每天吃什么，怎么动</h2><p class="subtle" id="week-intro">从轻量活动开始；身体适应后再增加时间。</p></div></div>
+          <div class="week" id="week-grid" role="group" aria-label="选择一天查看三餐与运动"></div>
+          <div class="daily-detail" id="daily-detail" role="region" aria-label="每日三餐与运动详情" aria-live="polite"></div>
+          <p class="daily-note">这是可重复使用的一周参考。更新资料会重新生成安排；历史打卡保留完成状态。</p>
+        </section>
+        <section class="card panel" id="record" aria-labelledby="record-title">
+          <div class="section-kicker">04 / 留下记录</div><h2 id="record-title">把每一步，慢慢记下来</h2><p class="subtle">记录体重、饮食与活动，再留意长期变化。数据保存在此浏览器，下次回来可以接着记。</p>
+          <div class="record-columns">
+            <section aria-labelledby="weight-title">
+              <h3 id="weight-title">体重趋势</h3>
+              <div class="tracker-form" id="record-form" role="group" aria-label="记录体重"><input type="date" id="record-date" aria-label="记录日期" autocomplete="off" required><input type="number" id="record-weight" aria-label="体重，千克" min="30" max="300" step="0.1" placeholder="体重 kg" required inputmode="decimal" autocomplete="off"><button id="add-record" type="button">记录</button></div>
+              <p class="error" id="record-error" role="alert"></p>
+              <div class="range-controls" role="group" aria-label="体重图时间范围"><button type="button" data-range="7" aria-pressed="false">近 7 天</button><button type="button" data-range="30" aria-pressed="true">近 30 天</button><button type="button" data-range="90" aria-pressed="false">近 90 天</button></div>
+              <div class="stat-grid"><div class="stat"><strong id="latest-weight">—</strong><span>范围内最近体重</span></div><div class="stat"><strong id="weight-change">—</strong><span>范围内首尾变化</span></div><div class="stat"><strong id="weight-average">—</strong><span>最近 7 天均值</span></div></div>
+              <div class="chart-box" id="chart" aria-label="体重变化图"></div>
+              <div class="chart-legend"><span><i class="legend-mark raw"></i>实际体重</span><span><i class="legend-mark average"></i>过去 7 天记录均值</span></div>
+              <p class="daily-note" id="trend-note"></p>
+              <details open><summary class="daily-note" id="record-count">全部记录（0）</summary><div class="entries" id="entries"></div></details>
+            </section>
+            <section aria-labelledby="habit-title">
+              <h3 id="habit-title">今天，照顾好自己了吗</h3>
+              <label class="habit-date-label">打卡日期（可补记）<input type="date" id="habit-date" required></label>
+              <div class="habit-checks"><label class="habit-check"><input type="checkbox" id="meal-check"><span>好好吃饭<small>规律进餐，照顾饥饿感</small></span></label><label class="habit-check"><input type="checkbox" id="movement-check"><span>完成适合自己的活动／恢复<small>按计划活动，恢复日好好休息</small></span></label></div>
+              <p class="error" id="habit-error" role="alert"></p>
+              <div class="stat-grid"><div class="stat"><strong id="habit-days">0 天</strong><span>最近 7 天有打卡</span></div><div class="stat"><strong id="habit-streak">0 天</strong><span>连续打卡</span></div></div>
+              <p class="daily-note" id="habit-counts"></p><ul class="habit-history" id="habit-history" aria-label="最近七天的打卡记录"></ul>
+            </section>
+          </div>
+          <section class="checkin-section" aria-labelledby="checkin-title"><h3 id="checkin-title">留意身体的感受</h3><div class="checkin-layout"><div><label class="checkin-date-label">感受记录日期<input type="date" id="checkin-date" required></label>
+                <div id="checkin-form" class="adaptive-form" role="group" aria-label="本周感受"><label>疲劳感<select name="fatigue"><option value="low">不明显</option><option value="medium">有一点</option><option value="high">很疲劳</option></select></label><label>饥饿感<select name="hunger"><option value="low">不明显</option><option value="medium">有一点</option><option value="high">经常很饿</option></select></label><label>计划完成情况<select name="completion"><option value="high">大多完成</option><option value="medium">完成一半</option><option value="low">很难完成</option></select></label><button id="update-checkin" type="button">保存感受并调整建议</button></div>
+                <p class="error" id="checkin-error" role="alert"></p></div><div><div class="adapt-note" id="adapt-note" aria-live="polite"></div>
+                <p class="daily-note">最近 14 天内最新的感受会参与调整；更早的记录保留用于回顾。</p>
+                <details class="checkin-history"><summary id="checkin-count">最近的感受记录</summary><div id="checkin-history"></div></details>
+              </div></div>
+          </section>
+          <div class="record-tools"><p class="save-status" id="save-status" role="status" aria-live="polite"></p><div class="tool-buttons"><button type="button" class="secondary" id="export-data">导出备份</button><button type="button" class="secondary" id="import-data">导入备份</button><button type="button" class="clear-session" id="clear-session">清空全部数据</button></div></div>
+          <input type="file" id="import-file" accept=".json,application/json" hidden><p class="message" id="data-message" role="status" aria-live="polite"></p>
+          <p class="privacy">资料、体重、打卡和感受保存在当前浏览器，不上传服务器。跨设备或更换浏览器时，请导出再导入备份；清理浏览器数据会删除记录。备份包含你的健康相关信息，请妥善保管。共享设备上用完后可清空。</p>
+        </section>
       </div>
     </main>
     <footer>本页提供一般生活方式参考，不替代医疗建议。体重、运动能力和健康需要会随个人情况变化；有疾病、伤病或特殊生理阶段时，应与专业人员确认适合自己的目标。<div class="source-links"><a href="https://www.cdc.gov/healthy-weight-growth/losing-weight/index.html" target="_blank" rel="noopener noreferrer">CDC：循序渐进的减重</a><a href="https://www.cdc.gov/physical-activity-basics/guidelines/adults.html" target="_blank" rel="noopener noreferrer">CDC：成年人活动建议</a><a href="https://www.cdc.gov/arthritis/prevention/index.html" target="_blank" rel="noopener noreferrer">CDC：关节友好活动</a><a href="https://www.cdc.gov/physical-activity-basics/guidelines/older-adults.html" target="_blank" rel="noopener noreferrer">CDC：年长者活动建议</a></div></footer>
   </div>
+  <dialog class="import-dialog" id="import-dialog" aria-labelledby="import-title" aria-describedby="import-summary"><h2 id="import-title">导入这份备份？</h2><p id="import-summary"></p><div class="tool-buttons"><button type="button" class="secondary" id="cancel-import">取消导入</button><button type="button" class="primary" id="confirm-import">确认替换并导入</button></div></dialog>
+  <script src="./features.js" defer></script>
   <script src="./app.js" defer></script>
+  <script src="./ui.js" defer></script>
 </body>
 </html>
+

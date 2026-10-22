@@ -136,64 +136,8 @@
       bmiNote:'BMI 不能区分肌肉与脂肪，也不能单独判断健康状况。',firstStep:mode==='hold'?'先确认适用建议':`每周安排 ${active} 天`,
       stepNote:mode==='hold'?'现阶段不自动指定运动强度或减重速度。':data.health.includes('knee')?'按不加重疼痛的原则选择低冲击活动。':`每次不超过你可用的 ${data.minutes} 分钟，留出恢复时间。`,
       weekIntro:mode==='hold'?'这里不生成训练日程；根据专业建议安排适合自己的活动。':data.age>=65?'优先低冲击、轻力量和平衡，量力而行。':`本周 ${active} 天，每次不超过 ${data.minutes} 分钟；长期可逐步靠近成年人活动建议。`,
-      mealGuidance:meal.guidance,mealExample:meal.example,week,why:reasons,adaptNote,trend};
+      mealGuidance:meal.guidance,mealExample:meal.example,week:root.QingyingFeatures.detailedWeek(data,week,mode),why:reasons,adaptNote,trend};
   }
 
-  root.QingyingPlanner={buildPlan,weightTrend};
-  if (typeof document === 'undefined') return;
-
-  const $=id=>document.getElementById(id);
-  const form=$('plan-form'), dateInput=$('record-date');
-  const fields=Object.fromEntries(['age','height','current','goal','weeks','activity','experience','minutes','days','diet','equipment','place'].map(key=>[key,form.querySelector(`[name="${key}"]`)]));
-  const today=new Date(),todayText=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
-  dateInput.max=todayText;
-  let records=[],checkin=null,previous=null,currentData=null;
-  function forgetLegacyData(){try{for(const key of ['qingying-plan','qingying-records','qingying-checkin'])localStorage.removeItem(key);}catch(e){}}
-  function resetInputs(){
-    for(const el of document.querySelectorAll('#plan-form input, #record-form input')){
-      if(el.type==='checkbox')el.checked=el.defaultChecked;
-      else el.value=el.defaultValue;
-      el.autocomplete='off';
-    }
-    for(const el of document.querySelectorAll('#plan-form select, #checkin-form select')){
-      const index=[...el.options].findIndex(option=>option.defaultSelected);
-      el.selectedIndex=index<0?0:index;
-    }
-    dateInput.value=todayText;
-  }
-  resetInputs();
-  forgetLegacyData();
-  function readForm(){const num=k=>Number(fields[k].value);return {age:num('age'),height:num('height'),current:num('current'),goal:num('goal'),weeks:num('weeks'),activity:fields.activity.value,experience:fields.experience.value,minutes:num('minutes'),days:num('days'),diet:fields.diet.value,equipment:fields.equipment.value,place:fields.place.value,health:[...form.querySelectorAll('[name="health"]:checked')].map(el=>el.value)};}
-  function addTextList(container,items,className){container.replaceChildren(...items.map(text=>{const node=document.createElement(className==='why-item'?'div':'li');if(className)node.className=className;node.textContent=text;return node;}));}
-  function changes(oldPlan,newPlan){if(!oldPlan)return ['已按页面示例生成计划。改动资料后点击“更新我的计划”，这里会列出变化。'];const list=[];
-    if(oldPlan.mode!==newPlan.mode||oldPlan.paceText!==newPlan.paceText||oldPlan.durationText!==newPlan.durationText||oldPlan.summary!==newPlan.summary)list.push(`目标节奏：${oldPlan.paceText}／${oldPlan.durationText} → ${newPlan.paceText}／${newPlan.durationText}。`);
-    if(oldPlan.bmiText!==newPlan.bmiText)list.push(`体型参考：BMI 从 ${oldPlan.bmiText} 更新为 ${newPlan.bmiText}。`);
-    if(oldPlan.mealGuidance!==newPlan.mealGuidance||oldPlan.mealExample!==newPlan.mealExample)list.push('饮食：根据偏好或饥饿反馈重新给出搭配建议。');
-    if(JSON.stringify(oldPlan.week)!==JSON.stringify(newPlan.week))list.push(`运动：一周安排已更新，现在是“${newPlan.firstStep}”。`);
-    else if(oldPlan.weekIntro!==newPlan.weekIntro)list.push('运动：实际单次时长受目前运动基础或健康情况限制，已更新可用时间说明。');
-    if(oldPlan.adaptNote!==newPlan.adaptNote)list.push('后续调整：体重趋势或每周感受改变了提醒。');
-    return list.length?list:['资料已更新，目前主要建议无需改变。'];}
-  function render(data){const plan=buildPlan(data,records,checkin);$('plan-error').textContent='';
-    for(const [key,id] of [['headline','headline'],['summary','summary'],['paceText','pace'],['durationText','duration'],['bmiText','bmi'],['bmiLabel','bmi-label'],['bmiNote','bmi-note'],['firstStep','first-step'],['stepNote','step-note'],['weekIntro','week-intro'],['mealGuidance','meal-guidance'],['mealExample','meal-example'],['adaptNote','adapt-note']])$(id).textContent=plan[key];
-    $('week-grid').replaceChildren(...plan.week.map(item=>{const node=document.createElement('div');node.className='day';const a=document.createElement('strong'),b=document.createElement('span'),c=document.createElement('small'),d=document.createElement('em');a.textContent=item.day;b.textContent=item.title;c.textContent=item.duration;d.textContent=item.detail;node.append(a,b,c,d);return node;}));
-    addTextList($('why-list'),plan.why,'why-item');addTextList($('change-list'),changes(previous,plan));
-    previous=plan;currentData=data;
-    return plan;
-  }
-  $('update-plan').addEventListener('click',()=>{try{render(readForm());}catch(error){$('plan-error').textContent=error.message;}});
-  try{render(readForm());}catch(error){$('plan-error').textContent=error.message;}
-  function validDate(date){if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>dateInput.max)return false;const d=new Date(date+'T12:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===date;}
-  function draw(){const ordered=[...records].sort((a,b)=>a.date.localeCompare(b.date)),box=$('chart');box.replaceChildren();
-    if(!ordered.length){box.textContent='还没有记录。先记下今天的体重吧。';$('entries').replaceChildren();return;}
-    if(ordered.length===1)box.textContent=`第一条记录：${ordered[0].weight.toFixed(1)} kg。再记一次，就能看到变化。`;
-    else{const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 500 130');svg.setAttribute('role','img');svg.setAttribute('aria-label',`体重从 ${ordered[0].weight.toFixed(1)} 千克变化到 ${ordered.at(-1).weight.toFixed(1)} 千克`);const values=ordered.map(x=>x.weight),low=Math.min(...values)-0.5,high=Math.max(...values)+0.5;const pts=values.map((v,i)=>[20+i*460/(values.length-1),105-(v-low)*80/(high-low)]);const line=document.createElementNS(ns,'polyline');line.setAttribute('points',pts.map(p=>p.join(',')).join(' '));line.setAttribute('fill','none');line.setAttribute('stroke','#d5f468');line.setAttribute('stroke-width','3');line.setAttribute('stroke-linejoin','round');svg.append(line);pts.forEach(([cx,cy])=>{const c=document.createElementNS(ns,'circle');c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r','3');c.setAttribute('fill','#d5f468');svg.append(c);});box.append(svg);}
-    $('entries').replaceChildren(...ordered.slice().reverse().map(item=>{const row=document.createElement('div');row.className='entry';const date=document.createElement('span');date.textContent=item.date;const value=document.createElement('span'),strong=document.createElement('strong'),del=document.createElement('button');strong.textContent=item.weight.toFixed(1)+' kg';del.type='button';del.textContent='删除';del.setAttribute('aria-label',`删除 ${item.date} 的记录`);del.addEventListener('click',()=>{records=records.filter(x=>x.date!==item.date);draw();if(currentData)render(currentData);});value.append(strong,del);row.append(date,value);return row;}));
-  }
-  function record(date,weight){if(!validDate(date)||!finite(weight)||weight<30||weight>300)throw new Error('请填写今天或之前的有效日期，以及 30–300 kg 之间的体重。');records=records.filter(x=>x.date!==date);records.push({date,weight});records.sort((a,b)=>a.date.localeCompare(b.date));records=records.slice(-365);$('record-error').textContent='';draw();if(currentData)render(currentData);}
-  $('add-record').addEventListener('click',()=>{try{record(dateInput.value,Number($('record-weight').value));$('record-weight').value='';}catch(error){$('record-error').textContent=error.message;}});
-  $('update-checkin').addEventListener('click',()=>{const f=$('checkin-form');checkin={fatigue:f.querySelector('[name="fatigue"]').value,hunger:f.querySelector('[name="hunger"]').value,completion:f.querySelector('[name="completion"]').value,date:dateInput.max};if(currentData)render(currentData);});
-  draw();
-  function resetSession(){records=[];checkin=null;previous=null;currentData=null;resetInputs();forgetLegacyData();$('plan-error').textContent='';$('record-error').textContent='';draw();try{render(readForm());}catch(error){$('plan-error').textContent=error.message;}}
-  $('clear-session').addEventListener('click',resetSession);
-  window.addEventListener('pageshow',event=>{if(event.persisted)resetSession();});
+  root.QingyingPlanner={buildPlan,weightTrend,validate:data=>{validate(data);buildPlan(data);}};
 })(globalThis);

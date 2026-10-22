@@ -1,0 +1,5 @@
+{
+  "name": "qingying-plan",
+  "private": true,
+  "scripts": {"test": "node --test --test-isolation=none tests/*.test.cjs", "test:browser": "node tests/browser.cjs"}
+}
