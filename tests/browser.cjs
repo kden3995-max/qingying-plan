@@ -1,32 +1,23 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const http=require('node:http');
-const {chromium}=require('playwright');
+const {startBrowser,navigate,generate}=require('./browser-support.cjs');
 const root=path.join(__dirname,'..');
 
 (async()=>{
-  const server=http.createServer(async(req,res)=>{
-    const file=req.url.split('?')[0]==='/'?'index.html':req.url.split('?')[0].slice(1);
-    if (!['index.html','app.js','features.js','ui.js','styles.css','meal.webp'].includes(file)) {res.writeHead(404);res.end();return;}
-    try {const data=await fs.readFile(path.join(root,file));res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.webp')?'image/webp':'text/html; charset=utf-8');res.end(data);}
-    catch {res.writeHead(404);res.end();}
-  });
-  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  let browser;
+  const env=await startBrowser(),browser=env.browser;
   try {
-    browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
     const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});
     const page=await context.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
-    const base='http://127.0.0.1:'+server.address().port;
+    const base=env.base;
     await page.goto(base);
+    await generate(page);await navigate(page,'#/plan/week');
     assert.equal(await page.locator('#daily-detail .meal-item').count(),3,'selected day shows all three meals');
     assert.equal(await page.locator('#week-grid button').count(),7);
     console.log('PASS daily meals and weekly day selection');
-    await page.locator('#plan-form [name=diet]').selectOption('vegetarian');
-    await page.locator('#plan-form [name=days]').selectOption('4');
-    await page.locator('#update-plan').click();
+    await generate(page,{habits:{diet:'vegetarian',days:'4'}});
+    await navigate(page,'#/plan/records');
     await page.locator('#record-weight').fill('74.2');
     await page.locator('#add-record').click();
     await page.locator('#meal-check').check();
@@ -82,35 +73,48 @@ const root=path.join(__dirname,'..');
     assert.equal(await page.locator('#chart circle[data-weight]').count(),0,'one visible point uses honest single-point state');
     await page.getByRole('button',{name:'近 30 天',exact:true}).click();
     assert.equal(await page.locator('#chart circle[data-weight]').count(),2);
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForFunction(()=>{const el=document.querySelector('#chart svg text');return el&&Number(el.getAttribute('font-size'))*el.getScreenCTM().a>=10;});
+    assert.ok(await page.locator('#chart svg text').first().evaluate(el=>Number(el.getAttribute('font-size'))*el.getScreenCTM().a>=10),'mobile chart labels remain legible');
+    await page.screenshot({path:path.join(root,'artifacts/records-with-data-mobile.png'),fullPage:true});
+    await page.setViewportSize({width:1440,height:1000});
     console.log('PASS chart ranges use actual calendar dates');
+    await navigate(page,'#/profile/health');
     await page.locator('#plan-form [name=health][value=pregnant]').check();
     await page.locator('#update-plan').click();
+    await navigate(page,'#/plan/week');
     assert.equal(await page.locator('#daily-detail .meal-item').count(),0);
     assert.equal(await page.locator('#daily-detail .workout-step').count(),0);
     assert.match(await page.locator('#daily-detail').innerText(),/专业/);
+    await navigate(page,'#/profile/health');
     await page.locator('#plan-form [name=health][value=pregnant]').uncheck();
     await page.locator('#update-plan').click();
     console.log('PASS health hold suppresses automatic daily menus and exercise');
     for(const width of [320,375,768,1024]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`no page overflow at ${width}px`);}
     await page.setViewportSize({width:390,height:844});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'no mobile page overflow');
+    await navigate(page,'#/plan/week');
     await page.locator('#week-grid button').nth(2).click();
     assert.match(await page.locator('#daily-title').innerText(),/周三/);
-    await page.screenshot({path:path.join(root,'preview-mobile.png'),fullPage:true});
+    await fs.mkdir(path.join(root,'artifacts'),{recursive:true});
+    await page.screenshot({path:path.join(root,'artifacts/week-mobile.png'),fullPage:true});
     await page.setViewportSize({width:1440,height:1000});
     await page.locator('#week').scrollIntoViewIfNeeded();
-    await page.locator('#week').screenshot({path:path.join(root,'preview-week.png')});
-    await page.locator('#record').screenshot({path:path.join(root,'preview-record.png')});
+    await page.locator('#week').screenshot({path:path.join(root,'artifacts/week-desktop.png')});
+    await navigate(page,'#/plan/records');
+    await page.locator('#record').screenshot({path:path.join(root,'artifacts/records-desktop.png')});
     assert.equal(errors.length,0,errors.join('\n'));
     console.log('PASS mobile layout, day controls, and no browser runtime errors');
     // A second tab must not overwrite changes made after it loaded.
-    const tab=await context.newPage(); await tab.goto(base);
+    const tab=await context.newPage(); await tab.goto(base+'/#/plan/records');
     await page.locator('#record-date').fill(today); await page.locator('#record-weight').fill('73.1'); await page.locator('#add-record').click();
     await tab.waitForFunction(()=>document.getElementById('entries').textContent.includes('73.1'));
     await tab.locator('#meal-check').uncheck(); await tab.reload();
     assert.match(await tab.locator('#entries').innerText(),/73.1/);
     console.log('PASS tabs sync before subsequent writes');
+    await navigate(tab,'#/profile/habits');
     await tab.locator('#plan-form [name=diet]').selectOption('quick');
+    await navigate(tab,'#/plan/records');
     await tab.locator('#checkin-form [name=hunger]').selectOption('high');
     await page.locator('#record-weight').fill('73.0');await page.locator('#add-record').click();
     await tab.waitForFunction(()=>document.getElementById('entries').textContent.includes('73.0'));
@@ -128,20 +132,23 @@ const root=path.join(__dirname,'..');
     console.log('PASS conflicting unsaved tab cannot overwrite newer records');
     const blocked=await browser.newContext();
     await blocked.addInitScript(()=>{Object.defineProperty(Storage.prototype,'setItem',{value(){throw new Error('quota');}});});
-    const denied=await blocked.newPage(); await denied.goto(base);
+    const denied=await blocked.newPage(); await denied.goto(base+'/#/plan/records');
     await denied.locator('#record-weight').fill('71'); await denied.locator('#add-record').click();
     assert.match(await denied.locator('#save-status').innerText(),/未保存|暂存/);
     assert.match(await denied.locator('#entries').innerText(),/71.0/);
     await denied.locator('#export-data').click();
+    await generate(denied);
+    assert.ok(await denied.locator('#storage-warning').isVisible(),'failed profile saves remain visible on the results screen');
+    assert.match(await denied.locator('#storage-warning').innerText(),/未保存|暂存/);
     console.log('PASS blocked storage reports failure while retaining exportable page data');
     await blocked.close();
     const corrupt=await browser.newContext();
     await corrupt.addInitScript(()=>localStorage.setItem('qingying-state-v1','broken'));
-    const broken=await corrupt.newPage(); await broken.goto(base);
+    const broken=await corrupt.newPage(); await broken.goto(base+'/#/plan/records');
     await broken.locator('#record-weight').fill('72'); await broken.locator('#add-record').click();
     assert.equal(await broken.evaluate(()=>localStorage.getItem('qingying-state-v1')),'broken');
     assert.match(await broken.locator('#save-status').innerText(),/原数据/);
     console.log('PASS unreadable stored data remains untouched');
     await corrupt.close();
-  } finally {if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
+  } finally {await env.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

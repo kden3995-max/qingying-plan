@@ -1,0 +1,112 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const {startBrowser,navigate,fillBasic,generate}=require('./browser-support.cjs');
+(async()=>{
+ const env=await startBrowser();
+ try{
+  const context=await env.browser.newContext({viewport:{width:1440,height:800},locale:'zh-CN'}),page=await context.newPage(),errors=[],external=[];
+  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(env.base))external.push(r.url());});
+  page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
+  await page.goto(env.base);
+  assert.equal(await page.locator('[data-screen]:not([hidden])').count(),1,'only one primary screen is displayed');
+  assert.ok(await page.locator('#screen-home').isVisible());
+  await page.evaluate(()=>window.__documentProbe=42);
+  await page.locator('#start-plan').click();
+  assert.equal(new URL(page.url()).hash,'#/profile/basic');
+  assert.ok(!(await page.locator('#screen-home').isVisible()));
+  assert.equal(await page.locator('#plan-form [name=age]').inputValue(),'','first use must not prefill personal example data');
+  await page.locator('#next-profile').click();
+  assert.equal(await page.locator('#plan-form [name=age]').getAttribute('aria-invalid'),'true');
+  assert.equal(await page.evaluate(()=>document.activeElement.name),'age');
+  await fillBasic(page);
+  await page.locator('#next-profile').click();
+  assert.equal(new URL(page.url()).hash,'#/profile/habits');
+  await page.locator('#plan-form [name=diet]').selectOption('vegetarian');
+  await page.locator('#previous-profile').click();
+  assert.equal(await page.locator('#plan-form [name=current]').inputValue(),'75');
+  await page.locator('#next-profile').click();assert.equal(await page.locator('[name=diet]').inputValue(),'vegetarian');
+  await page.locator('#next-profile').click();await page.locator('#update-plan').click();
+  await page.waitForFunction(()=>location.hash==='#/plan/overview');
+  assert.equal(await page.locator('[data-screen]:not([hidden])').count(),1);
+  assert.ok(await page.locator('#screen-plan').isVisible());
+  assert.equal(await page.evaluate(()=>window.__documentProbe),42,'navigation must not reload the document');
+  assert.equal(await page.evaluate(()=>window.scrollY),0);
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'plan-view-title');
+  assert.match(await page.locator('#why-list').innerText(),/饮食|素食/);
+  const saved=await page.evaluate(()=>localStorage.getItem('qingying-state-v1'));
+  await page.evaluate(()=>scrollTo(0,500));
+  await page.locator('[data-plan-tab=week]').click();
+  assert.equal(await page.evaluate(()=>window.scrollY),0);assert.equal(await page.locator('#daily-detail .meal-item').count(),3);
+  assert.equal(await page.locator('[data-plan-panel]:not([hidden])').count(),1);
+  await page.locator('#edit-profile').click();
+  assert.equal(await page.locator('[name=diet]').inputValue(),'vegetarian');
+  await page.locator('[name=current]').fill('76');await page.locator('#next-profile').click();
+  await page.goBack();assert.equal(new URL(page.url()).hash,'#/profile/basic');assert.equal(await page.locator('[name=current]').inputValue(),'76');
+  await page.goForward();assert.equal(new URL(page.url()).hash,'#/profile/habits');
+  await page.locator('#return-plan').click();
+  await page.locator('#plan-pending').waitFor({state:'visible'});
+  assert.ok(await page.locator('#plan-pending').isVisible());assert.match(await page.locator('#bmi').innerText(),/26.0/);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('qingying-state-v1')),saved,'routing and draft edits must not write data');
+  await page.reload();assert.ok(!(await page.locator('#plan-pending').isVisible()));
+  await page.locator('#edit-profile').click();assert.equal(await page.locator('[name=current]').inputValue(),'75','refresh restores submitted data, not unsaved drafts');
+  await page.locator('[name=goal]').fill('400');await page.locator('#next-profile').click();
+  assert.equal(await page.locator('[name=goal]').getAttribute('aria-invalid'),'true');
+  await page.locator('[name=goal]').fill('70');await page.locator('[name=current]').fill('');
+  await navigate(page,'#/home');await page.goBack();assert.equal(await page.locator('[name=current]').inputValue(),'','unfinished raw drafts survive navigation');
+  await page.locator('[name=current]').fill('75');
+  await page.locator('#next-profile').click();await page.locator('#next-profile').click();
+  await page.locator('[name=health][value=knee]').check();await navigate(page,'#/home');await page.goBack();
+  assert.ok(await page.locator('[name=health][value=knee]').isChecked());await page.locator('[name=health][value=knee]').uncheck();
+  await navigate(page,'#/plan/records');await page.locator('.skip-link').focus();await page.keyboard.press('Enter');
+  assert.equal(new URL(page.url()).hash,'#/plan/records');assert.equal(await page.evaluate(()=>document.activeElement.id),'main-content');
+  console.log('PASS screen/step isolation, validation, focus, no reload, draft and history preservation, pending results');
+  const fresh=await env.browser.newContext(),empty=await fresh.newPage();await empty.goto(env.base+'/#/plan/overview');
+  assert.ok(await empty.locator('#plan-empty').isVisible());assert.ok(!(await empty.locator('#plan-content').isVisible()));
+  await navigate(empty,'#/plan/records');await empty.locator('#record-weight').fill('72');await empty.locator('#add-record').click();assert.match(await empty.locator('#entries').innerText(),/72.0/);
+  assert.deepEqual(await empty.evaluate(()=>Object.keys(localStorage)),['qingying-state-v1']);
+  await navigate(empty,'#/home');await empty.locator('#view-example').click();assert.match(await empty.locator('#plan-badge').innerText(),/示例/);
+  assert.equal(await empty.locator('#chart circle[data-weight]').count(),0);
+  assert.equal(JSON.parse(await empty.evaluate(()=>localStorage.getItem('qingying-state-v1'))).profile,null,'example viewing must not persist a profile');
+  await navigate(empty,'#/profile/health');await empty.locator('#update-plan').click();
+  await empty.waitForFunction(()=>location.hash==='#/profile/basic');
+  await empty.waitForFunction(()=>document.activeElement.name==='age');
+  const compatibility=await fresh.newPage();await compatibility.goto(env.base);
+  await generate(compatibility,{basic:{height:'170.25',current:'75.25'}});
+  await compatibility.reload();await compatibility.locator('#edit-profile').click();
+  assert.equal(await compatibility.locator('[name=height]').inputValue(),'170.25');
+  await compatibility.locator('#next-profile').click();await compatibility.locator('#next-profile').click();await compatibility.locator('#update-plan').click();
+  await generate(compatibility,{basic:{goal:'75'},health:['pregnant']});
+  assert.match(await compatibility.locator('#summary').innerText(),/孕期|哺乳期/);
+  assert.ok(!(await compatibility.locator('#target-row').isVisible()));
+  await navigate(compatibility,'#/profile/health');await compatibility.locator('[name=health][value=pregnant]').uncheck();
+  await compatibility.locator('#update-plan').click();
+  assert.equal(new URL(compatibility.url()).hash,'#/profile/basic');assert.equal(await compatibility.locator('[name=goal]').getAttribute('aria-invalid'),'true');
+  await compatibility.close();
+  console.log('PASS deep links, honest empty/sample states and independent records without extra storage');
+  await navigate(page,'#/home');
+  for(const width of [320,390,430,768,1440]){
+   await page.setViewportSize({width,height:844});
+   for(const route of ['#/home','#/profile/basic','#/plan/overview','#/plan/week','#/plan/records']){
+    await navigate(page,route);
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`no overflow at ${width} on ${route}`);
+    if(width<700){
+     const small=await page.locator('button:visible, a.button:visible, .route-tab:visible, .mobile-menu summary:visible').evaluateAll(nodes=>nodes.filter(el=>{const r=el.getBoundingClientRect();return r.width<43.9||r.height<43.9;}).map(el=>el.textContent));
+     assert.deepEqual(small,[],`touch targets at ${width} on ${route}`);
+    }
+   }
+  }
+  await page.setViewportSize({width:390,height:844});await navigate(page,'#/plan/overview');
+  const sizes=await page.locator('button:visible, a.button:visible, .route-tab:visible, .mobile-menu summary:visible').evaluateAll(nodes=>nodes.map(el=>({label:el.textContent.trim(),w:el.getBoundingClientRect().width,h:el.getBoundingClientRect().height})));
+  assert.ok(sizes.every(s=>s.w>=43.9&&s.h>=43.9),JSON.stringify(sizes));
+  await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).scrollBehavior),'auto');
+  await fs.mkdir(path.join(env.root,'artifacts'),{recursive:true});
+  await page.screenshot({path:path.join(env.root,'artifacts/results-mobile.png'),fullPage:true});
+  await page.setViewportSize({width:1440,height:1024});await navigate(page,'#/home');await page.screenshot({path:path.join(env.root,'artifacts/home-desktop.png'),fullPage:true});
+  await navigate(page,'#/plan/overview');await page.screenshot({path:path.join(env.root,'artifacts/results-desktop.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  for(const [route,file] of [['#/home','home-mobile'],['#/profile/basic','profile-mobile'],['#/plan/records','records-mobile']]){await navigate(page,route);await page.screenshot({path:path.join(env.root,'artifacts/'+file+'.png'),fullPage:true});}
+  assert.equal(errors.length,0,errors.join('\n'));assert.deepEqual(external,[],'runtime should request only local assets');
+  console.log('PASS responsive layouts, primary touch sizes, reduced motion, local resources and zero runtime errors');
+ }finally{await env.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,5 +1,10 @@
 {
   "name": "qingying-plan",
   "private": true,
-  "scripts": {"test": "node --test --test-isolation=none tests/*.test.cjs", "test:browser": "node tests/browser.cjs"}
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/*.test.cjs",
+    "test:browser": "node tests/navigation.cjs && node tests/browser.cjs",
+    "dev": "node scripts/serve.cjs",
+    "test:pages": "QINGYING_TEST_BASE_PATH=/qingying-plan npm run test:browser"
+  }
 }
