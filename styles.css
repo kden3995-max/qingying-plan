@@ -1974,3 +1974,62 @@ footer {
     gap:18px;
   }
 }
+/* A cached/returning page stays concealed until guest state is sanitized. */
+html[data-guest-ready="false"] main,
+html[data-guest-ready="false"] dialog {
+  visibility:hidden;
+}
+.guest-bar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  padding-top:16px;
+  padding-bottom:8px;
+}
+.guest-bar p {
+  color:var(--muted);
+  font-size:14px;
+}
+.guest-bar strong {
+  color:var(--green);
+  margin-right:12px;
+}
+.guest-bar button {
+  flex-shrink:0;
+}
+.legacy-notice {
+  margin-top:16px;
+}
+.legacy-notice .card {
+  border:1px solid #C8D3CD;
+  padding:22px 26px;
+}
+.legacy-notice h2 {
+  font-size:20px;
+  margin-bottom:8px;
+}
+.legacy-notice p {
+  color:var(--muted);
+  font-size:15px;
+}
+#legacy-message:not(:empty) {
+  margin-top:14px;
+}
+@media(max-width:700px) {
+  .guest-bar {
+    flex-direction:column;
+    align-items:stretch;
+    gap:12px;
+  }
+  .guest-bar strong {
+    display:block;
+    margin-bottom:4px;
+  }
+  .guest-bar .button {
+    min-height:46px;
+  }
+  .legacy-notice .card {
+    padding:22px;
+  }
+}

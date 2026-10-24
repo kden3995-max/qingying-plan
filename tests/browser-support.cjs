@@ -3,7 +3,7 @@ const http=require('node:http');
 const path=require('node:path');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
-async function startBrowser(){
+async function startBrowser({bfcache=false}={}){
  const mountPath=process.env.QINGYING_TEST_BASE_PATH||'';
  if(mountPath&&!/^\/[a-z0-9-]+$/i.test(mountPath))throw new Error('Invalid test mount path');
  const server=http.createServer(async(req,res)=>{
@@ -21,11 +21,12 @@ async function startBrowser(){
  });
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
  let browser;
- try{browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});}
+ try{browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',ignoreDefaultArgs:bfcache?['--disable-back-forward-cache']:undefined,args:['--no-sandbox']});}
  catch(error){await new Promise(resolve=>server.close(resolve));throw error;}
  return {browser,base:'http://127.0.0.1:'+server.address().port+mountPath,root,async close(){await browser.close();await new Promise(resolve=>server.close(resolve));}};
 }
-async function navigate(page,hash){await page.evaluate(h=>{location.hash=h;},hash);await page.waitForFunction(h=>location.hash===h,hash);await page.waitForTimeout(50);}
+async function waitForGuest(page){await page.waitForFunction(()=>!document.documentElement.hasAttribute('data-guest-ready')||document.documentElement.dataset.guestReady==='true');}
+async function navigate(page,hash){await waitForGuest(page);await page.evaluate(h=>{location.hash=h;},hash);await page.waitForFunction(h=>location.hash===h,hash);await page.waitForTimeout(50);}
 async function fillBasic(page,values={}){
  for(const [name,value] of Object.entries({age:'25',height:'170',current:'75',goal:'70',weeks:'12',...values}))await page.locator('#plan-form [name='+name+']').fill(value);
 }
@@ -38,4 +39,4 @@ async function generate(page,options={}){
  await page.locator('#update-plan').click();
  await page.waitForFunction(()=>location.hash==='#/plan/overview');
 }
-module.exports={startBrowser,navigate,fillBasic,generate};
+module.exports={startBrowser,navigate,fillBasic,generate,waitForGuest};

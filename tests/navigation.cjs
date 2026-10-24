@@ -1,14 +1,14 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
-const {startBrowser,navigate,fillBasic,generate}=require('./browser-support.cjs');
+const {startBrowser,navigate,fillBasic,generate,waitForGuest}=require('./browser-support.cjs');
 (async()=>{
  const env=await startBrowser();
  try{
   const context=await env.browser.newContext({viewport:{width:1440,height:800},locale:'zh-CN'}),page=await context.newPage(),errors=[],external=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(env.base))external.push(r.url());});
   page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
-  await page.goto(env.base);
+  await page.goto(env.base);await waitForGuest(page);
   assert.equal(await page.locator('[data-screen]:not([hidden])').count(),1,'only one primary screen is displayed');
   assert.ok(await page.locator('#screen-home').isVisible());
   await page.evaluate(()=>window.__documentProbe=42);
@@ -48,8 +48,8 @@ const {startBrowser,navigate,fillBasic,generate}=require('./browser-support.cjs'
   await page.locator('#plan-pending').waitFor({state:'visible'});
   assert.ok(await page.locator('#plan-pending').isVisible());assert.match(await page.locator('#bmi').innerText(),/26.0/);
   assert.equal(await page.evaluate(()=>localStorage.getItem('qingying-state-v1')),saved,'routing and draft edits must not write data');
-  await page.reload();assert.ok(!(await page.locator('#plan-pending').isVisible()));
-  await page.locator('#edit-profile').click();assert.equal(await page.locator('[name=current]').inputValue(),'75','refresh restores submitted data, not unsaved drafts');
+  await page.reload();await waitForGuest(page);assert.ok(!(await page.locator('#plan-pending').isVisible()));
+  assert.equal(new URL(page.url()).hash,'#/home');await navigate(page,'#/profile/basic');assert.equal(await page.locator('[name=current]').inputValue(),'','refresh starts a blank guest');await fillBasic(page);
   await page.locator('[name=goal]').fill('400');await page.locator('#next-profile').click();
   assert.equal(await page.locator('[name=goal]').getAttribute('aria-invalid'),'true');
   await page.locator('[name=goal]').fill('70');await page.locator('[name=current]').fill('');
@@ -61,21 +61,22 @@ const {startBrowser,navigate,fillBasic,generate}=require('./browser-support.cjs'
   await navigate(page,'#/plan/records');await page.locator('.skip-link').focus();await page.keyboard.press('Enter');
   assert.equal(new URL(page.url()).hash,'#/plan/records');assert.equal(await page.evaluate(()=>document.activeElement.id),'main-content');
   console.log('PASS screen/step isolation, validation, focus, no reload, draft and history preservation, pending results');
-  const fresh=await env.browser.newContext(),empty=await fresh.newPage();await empty.goto(env.base+'/#/plan/overview');
+  const fresh=await env.browser.newContext(),empty=await fresh.newPage();await empty.goto(env.base+'/#/plan/overview');await waitForGuest(empty);await navigate(empty,'#/plan/overview');
   assert.ok(await empty.locator('#plan-empty').isVisible());assert.ok(!(await empty.locator('#plan-content').isVisible()));
   await navigate(empty,'#/plan/records');await empty.locator('#record-weight').fill('72');await empty.locator('#add-record').click();assert.match(await empty.locator('#entries').innerText(),/72.0/);
-  assert.deepEqual(await empty.evaluate(()=>Object.keys(localStorage)),['qingying-state-v1']);
+  assert.deepEqual(await empty.evaluate(()=>Object.keys(localStorage)),[]);
   await navigate(empty,'#/home');await empty.locator('#view-example').click();assert.match(await empty.locator('#plan-badge').innerText(),/示例/);
   assert.equal(await empty.locator('#chart circle[data-weight]').count(),0);
-  assert.equal(JSON.parse(await empty.evaluate(()=>localStorage.getItem('qingying-state-v1'))).profile,null,'example viewing must not persist a profile');
+  assert.equal(await empty.evaluate(()=>localStorage.getItem('qingying-state-v1')),null,'example viewing must not persist a profile');
   await navigate(empty,'#/profile/health');await empty.locator('#update-plan').click();
   await empty.waitForFunction(()=>location.hash==='#/profile/basic');
   await empty.waitForFunction(()=>document.activeElement.name==='age');
   const compatibility=await fresh.newPage();await compatibility.goto(env.base);
   await generate(compatibility,{basic:{height:'170.25',current:'75.25'}});
-  await compatibility.reload();await compatibility.locator('#edit-profile').click();
+  await compatibility.locator('#edit-profile').click();
   assert.equal(await compatibility.locator('[name=height]').inputValue(),'170.25');
   await compatibility.locator('#next-profile').click();await compatibility.locator('#next-profile').click();await compatibility.locator('#update-plan').click();
+  await compatibility.reload();await waitForGuest(compatibility);assert.equal(await compatibility.locator('[name=height]').inputValue(),'');
   await generate(compatibility,{basic:{goal:'75'},health:['pregnant']});
   assert.match(await compatibility.locator('#summary').innerText(),/孕期|哺乳期/);
   assert.ok(!(await compatibility.locator('#target-row').isVisible()));
@@ -84,7 +85,7 @@ const {startBrowser,navigate,fillBasic,generate}=require('./browser-support.cjs'
   assert.equal(new URL(compatibility.url()).hash,'#/profile/basic');assert.equal(await compatibility.locator('[name=goal]').getAttribute('aria-invalid'),'true');
   await compatibility.close();
   console.log('PASS deep links, honest empty/sample states and independent records without extra storage');
-  await navigate(page,'#/home');
+  await generate(page,{habits:{diet:'vegetarian'}});await navigate(page,'#/home');
   for(const width of [320,390,430,768,1440]){
    await page.setViewportSize({width,height:844});
    for(const route of ['#/home','#/profile/basic','#/plan/overview','#/plan/week','#/plan/records']){
