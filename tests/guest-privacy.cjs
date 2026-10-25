@@ -48,7 +48,7 @@ const backup=state=>JSON.stringify({app:'qingying-plan',state});
    assert.equal(await page.locator('[name=current]').inputValue(),'','old browser profile must not auto-populate even hidden controls');
    assert.equal(await page.locator('#entries .entry').count(),0,'old records must not be displayed');
    assert.deepEqual(await page.evaluate(()=>__privacyCalls.reads),[],'no old value may be read before consent');
-   await ready(page);assert.ok(await page.locator('#legacy-notice').isVisible());
+   await ready(page);await navigate(page,'#/plan/records');assert.ok(await page.locator('#legacy-notice').isVisible());
    assert.ok(!(await page.locator('#legacy-notice').innerText()).includes('86.1'));
    assert.deepEqual(await page.evaluate(()=>__privacyCalls.writes),[]);assert.deepEqual(await page.evaluate(()=>__privacyCalls.deletes),[]);
   }finally{await context.close();}
@@ -86,7 +86,7 @@ const backup=state=>JSON.stringify({app:'qingying-plan',state});
    assert.ok(!(await page.locator('#entries').innerText()).includes('72.5'));assert.equal(await page.evaluate(()=>__privacyCalls.reads.filter(x=>x.key==='qingying-state-v1').length),1);
    assert.equal(await page.evaluate(()=>__readLegacy()),JSON.stringify(oldState));assert.deepEqual(await page.evaluate(()=>__privacyCalls.writes),[]);
    await end(page);await empty(page);await page.reload();await ready(page);await empty(page);
-   page.once('dialog',d=>d.accept());await page.locator('#delete-legacy').click();assert.equal(await page.evaluate(()=>__readLegacy()),null);
+   await navigate(page,'#/plan/records');page.once('dialog',d=>d.accept());await page.locator('#delete-legacy').click();assert.equal(await page.evaluate(()=>__readLegacy()),null);
    assert.equal(await page.evaluate(()=>localStorage.getItem('other-app-setting')),'leave-me');assert.ok(!(await page.locator('#legacy-notice').isVisible()));
   }finally{await context.close();}
  }],
@@ -131,8 +131,8 @@ const backup=state=>JSON.stringify({app:'qingying-plan',state});
   const {page,context,releaseAsset}=await fresh({legacy:JSON.stringify(oldState),holdAsset:true});try{
    assert.equal(await page.evaluate(()=>document.documentElement.dataset.guestReady),'false');
    let blocked=false;
-   try{await page.locator('#restore-legacy').click({timeout:400});}catch(error){if(error.name==='TimeoutError')blocked=true;else throw error;}
-   assert.ok(blocked,'suspended pages must not allow an invisible legacy modal to open before sanitation');
+   try{await page.locator('#end-guest').click({timeout:400});}catch(error){if(error.name==='TimeoutError')blocked=true;else throw error;}
+   assert.ok(blocked,'suspended pages must not allow global controls to act before sanitation');
    assert.ok(!(await page.locator('#legacy-dialog').evaluate(el=>el.open)));
    releaseAsset();await ready(page);await empty(page);
   }finally{releaseAsset();await context.close();}

@@ -9,13 +9,13 @@
   const exampleProfile={age:25,height:170,current:75,goal:70,weeks:12,activity:'low',experience:'beginner',minutes:20,days:3,diet:'balanced',equipment:'none',place:'home',health:[]};
   let state=F.emptyState(),previous=null,currentData=null,currentPlan=null,range=30,pendingImport=null,profileDraft=false,feelingsDraft=false;
   let selectedDay=(new Date(today()+'T12:00:00Z').getUTCDay()+6)%7,experienceGeneration=0,readyTimer=null,pickerGeneration=null;
-  let exampleMode=false,route={screen:'home',step:null,panel:null},router;
+  let exampleMode=false,homeNoticeDismissed=false,route={screen:'home',step:null,panel:null},router;
   const steps=['basic','habits','health'];
   const backupURLs=new Set();
   function setGuestReady(ready) {document.documentElement.dataset.guestReady=String(ready);document.body.inert=!ready;}
   setGuestReady(false);
   function node(tag,text,className) {const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;}
-  function status(text,warning=false) {$('save-status').textContent=text;$('save-status').classList.toggle('warning',warning);$('storage-warning').textContent=warning?text:'';$('storage-warning').hidden=!warning;$('profile-note').textContent=warning?text:'未提交的填写内容仅在当前页面保留。';$('profile-note').classList.toggle('warning',warning);}
+  function status(text,warning=false) {$('save-status').textContent=text;$('save-status').classList.toggle('warning',warning);$('storage-warning').textContent=warning?text:'';$('storage-warning').hidden=!warning;$('profile-note').textContent=warning?text:'填写完成后生成计划，也可以随时返回修改。';$('profile-note').classList.toggle('warning',warning);}
   function message(text,error=false) {$('data-message').textContent=text;$('data-message').classList.toggle('error-message',error);}
   function readForm() {const data=Object.fromEntries(profileFields.map(key=>[key,numbers.includes(key)?Number(fields[key].value):fields[key].value]));data.health=[...form.querySelectorAll('[name="health"]:checked')].map(el=>el.value);return data;}
   function restoreProfile(profile) {
@@ -24,7 +24,7 @@
   }
   function recentCheckin() {const last=state.checkins.at(-1);return last && last.date>=F.addDays(today(),-13)?last:null;}
   function save(next) {
-    try {const clean=F.normalizeState(next,P.validate,today());state=clean;status('已更新本次体验 · 仅在本页内存中保留，刷新或离开会清空');return true;}
+    try {const clean=F.normalizeState(next,P.validate,today());state=clean;status('已更新本次体验');return true;}
     catch {status('本次修改无法应用，原有体验资料未改变。请检查输入或导出当前备份。',true);return false;}
   }
   function changes(oldPlan,newPlan) {
@@ -124,6 +124,8 @@
   function restoreAll() {previous=null;restoreProfile(state.profile);profileDraft=false;currentData=exampleMode?exampleProfile:state.profile;restoreFeelings();refresh();}
   function showRoute(next) {
     route=next;
+    if(route.screen!=='home'&&document.documentElement.dataset.guestReady==='true')homeNoticeDismissed=true;
+    $('home-privacy-note').hidden=homeNoticeDismissed;
     for(const screen of document.querySelectorAll('[data-screen]'))screen.hidden=screen.dataset.screen!==route.screen;
     for(const group of document.querySelectorAll('[data-profile-step]'))group.hidden=group.dataset.profileStep!==route.step;
     for(const panel of document.querySelectorAll('[data-plan-panel]'))panel.hidden=panel.dataset.planPanel!==route.panel;
@@ -171,8 +173,9 @@
     range=30;for(const b of document.querySelectorAll('[data-range]'))b.setAttribute('aria-pressed',String(b.dataset.range==='30'));
     selectedDay=(new Date(today()+'T12:00:00Z').getUTCDay()+6)%7;
     for(const el of document.querySelectorAll('#main-content details'))el.open=defaultDetails.get(el)||false;
+    document.querySelector('.mobile-menu').open=false;
     restoreAll();
-    status(notify?'本次体验已结束，资料、记录、图表和草稿已清空。旧版浏览器数据需另行选择删除。':'游客体验：资料与记录仅在本页内存中保留，刷新或离开会清空。需要保留请手动导出。');
+    status(notify?'本次体验已结束，资料、记录、图表和草稿已清空。旧版浏览器数据需另行选择删除。':'');
     if(home&&router)router.go('#/home',{replace:true});
   }
   function enterExperience() {
@@ -188,6 +191,7 @@
     },0);
   }
   function leaveExperience() {
+    homeNoticeDismissed=true;$('home-privacy-note').hidden=true;
     setGuestReady(false);resetExperience({home:false});
   }
   function replaceMemory(next) {
@@ -214,7 +218,7 @@
   }
   for(const id of ['record-date','habit-date','checkin-date']){$(id).max=today();$(id).value=today();}
   for(const el of document.querySelectorAll('input,select'))el.setAttribute('autocomplete','off');
-  status('游客体验：资料与记录仅在本页内存中保留，刷新或离开会清空。需要保留请手动导出。');
+  status('');
   restoreAll();
   router=globalThis.QingyingRouter.start(showRoute);
   inspectLegacy();
@@ -284,7 +288,7 @@
     if(!confirm('结束本次游客体验并清空资料、记录、图表和草稿？需要保留请先导出备份。旧版浏览器数据需单独选择删除。'))return;
     resetExperience({notify:true});setGuestReady(true);$('home-title').focus({preventScroll:true});window.scrollTo(0,0);
   }
-  $('end-guest').addEventListener('click',endExperience);$('clear-session').addEventListener('click',endExperience);
+  for(const id of ['end-guest','clear-session','menu-end-guest'])$(id).addEventListener('click',endExperience);
   $('restore-legacy').addEventListener('click',()=>{$('legacy-error').textContent='';$('legacy-dialog').showModal();});
   $('cancel-legacy').addEventListener('click',()=>$('legacy-dialog').close());
   $('confirm-legacy').addEventListener('click',()=>{
