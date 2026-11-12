@@ -42,7 +42,7 @@
     for(const [key,id] of [['headline','headline'],['summary','summary'],['paceText','pace'],['durationText','duration'],['bmiText','bmi'],['bmiLabel','bmi-label'],['bmiNote','bmi-note'],['firstStep','first-step'],['stepNote','step-note'],['weekIntro','week-intro'],['mealGuidance','meal-guidance'],['mealExample','meal-example'],['adaptNote','adapt-note']])$(id).textContent=plan[key];
     const compact=plan.mode==='active'&&plan.headline.startsWith('按每周约 ');
     document.querySelector('.overview').classList.toggle('compact-plan',compact);
-    if(compact){$('headline').textContent=plan.headline.replace(/^按每周约 /,'每周约 ').replace(' 的节奏，','，');$('summary').textContent='这里只是目标平均值，实际体重会波动。';}
+    if(compact){$('headline').textContent=plan.headline.replace(/^按每周约 /,'每周约 ').replace(' 的节奏，','，');$('summary').textContent='这是目标平均值，实际体重会波动。';}
     $('why-list').replaceChildren(...plan.why.map(text=>node('div',text,'why-item')));
     $('change-list').replaceChildren(...changes(previous,plan).map(text=>node('li',text)));
     currentData=data;currentPlan=plan;previous=plan;
@@ -59,10 +59,10 @@
   }
   function renderDaily() {
     const day=currentPlan.week[selectedDay],box=$('daily-detail');box.replaceChildren();
-    const heading=node('div',undefined,'daily-heading'),copy=node('div');copy.append(node('h3',day.day+' · 吃饭与活动'));copy.lastChild.id='daily-title';copy.append(node('p','按你的条件生成的一周参考，可按生活节奏调整。'));
+    const heading=node('div',undefined,'daily-heading'),copy=node('div');copy.append(node('h3',day.day+' · 吃饭与活动'));copy.lastChild.id='daily-title';
     heading.append(copy,node('span',day.workout.totalMinutes?`共约 ${day.workout.totalMinutes} 分钟`:currentPlan.mode==='hold'?'先确认建议':'恢复日','pill'));box.append(heading);
     if(currentPlan.mode==='hold'){box.append(node('p',currentPlan.summary,'subtle'),node('p','这里暂不生成每日食谱或训练动作，请与专业人员确认适合自己的安排。','daily-note'));return;}
-    const columns=node('div',undefined,'daily-columns'),meals=node('section'),workout=node('section');meals.append(node('h4','三餐有着落'));
+    const columns=node('div',undefined,'daily-columns'),meals=node('section'),workout=node('section');meals.append(node('h4','三餐搭配'));
     for(const meal of day.meals){const item=node('article',undefined,'meal-item'),details=node('details');details.append(node('summary','换一种搭配'),node('p',meal.swap));item.append(node('strong',meal.name),node('p',meal.food),details);meals.append(item);}
     meals.append(node('p','这是搭配示例，份量按饥饿感和日常需要调整，不用跳餐。饿时可补充水果、豆浆或其他合适加餐；过敏食材请替换，包装食品注意配料。','daily-note'));
     workout.append(node('h4',day.title));
@@ -79,12 +79,12 @@
     const x=date=>55+(Date.parse(date+'T12:00:00Z')-Date.parse(summary.start+'T12:00:00Z'))/86400000/(range-1)*(right-55);
     const y=value=>170-(value-low)/(high-low)*145;
     const svg=svgNode('svg',{viewBox:`0 0 ${width} 215`,role:'img','aria-label':`近 ${range} 天体重图，${points[0].date} 的 ${points[0].weight.toFixed(1)} 千克到 ${points.at(-1).date} 的 ${points.at(-1).weight.toFixed(1)} 千克；详细数值见下方记录。`});
-    for(let i=0;i<3;i++){const v=low+(high-low)*i/2,py=y(v);svg.append(svgNode('line',{x1:55,x2:right,y1:py,y2:py,stroke:'#E3E7E4','stroke-width':1}),svgNode('text',{x:44,y:py+4,'text-anchor':'end',fill:'#65686D','font-size':12},v.toFixed(1)));}
-    svg.append(svgNode('text',{x:12,y:13,fill:'#65686D','font-size':11},'kg'));
-    for(const [date,anchor] of [[summary.start,'start'],[F.addDays(summary.start,Math.floor((range-1)/2)),'middle'],[summary.end,'end']])svg.append(svgNode('text',{x:x(date),y:199,'text-anchor':anchor,fill:'#65686D','font-size':12},date.slice(5)));
-    svg.append(svgNode('polyline',{points:points.map(p=>`${x(p.date)},${y(p.weight)}`).join(' '),fill:'none',stroke:'#8A9C94','stroke-width':2,'stroke-dasharray':'5 5'}));
-    svg.append(svgNode('polyline',{points:points.map(p=>`${x(p.date)},${y(p.average)}`).join(' '),fill:'none',stroke:'#176149','stroke-width':3,'stroke-linejoin':'round'}));
-    for(const p of points){const dot=svgNode('circle',{cx:x(p.date),cy:y(p.weight),r:4,fill:'#536E61','data-weight':p.weight});dot.append(svgNode('title',{},`${p.date}：${p.weight.toFixed(1)} kg，7 日均值 ${p.average.toFixed(1)} kg`));svg.append(dot);}box.append(svg);
+    for(let i=0;i<3;i++){const v=low+(high-low)*i/2,py=y(v);svg.append(svgNode('line',{x1:55,x2:right,y1:py,y2:py,stroke:'var(--line)','stroke-width':1}),svgNode('text',{x:44,y:py+4,'text-anchor':'end',fill:'var(--muted)','font-size':12},v.toFixed(1)));}
+    svg.append(svgNode('text',{x:12,y:13,fill:'var(--muted)','font-size':11},'kg'));
+    for(const [date,anchor] of [[summary.start,'start'],[F.addDays(summary.start,Math.floor((range-1)/2)),'middle'],[summary.end,'end']])svg.append(svgNode('text',{x:x(date),y:199,'text-anchor':anchor,fill:'var(--muted)','font-size':12},date.slice(5)));
+    svg.append(svgNode('polyline',{points:points.map(p=>`${x(p.date)},${y(p.weight)}`).join(' '),fill:'none',stroke:'var(--chart-observed)','stroke-width':2,'stroke-dasharray':'5 5'}));
+    svg.append(svgNode('polyline',{points:points.map(p=>`${x(p.date)},${y(p.average)}`).join(' '),fill:'none',stroke:'var(--green)','stroke-width':3,'stroke-linejoin':'round'}));
+    for(const p of points){const dot=svgNode('circle',{cx:x(p.date),cy:y(p.weight),r:4,fill:'var(--chart-observed)','data-weight':p.weight});dot.append(svgNode('title',{},`${p.date}：${p.weight.toFixed(1)} kg，7 日均值 ${p.average.toFixed(1)} kg`));svg.append(dot);}box.append(svg);
   }
   function drawRecords() {
     const summary=F.trendSummary(state.records,range,today()),latest=summary.records.at(-1);
@@ -109,12 +109,11 @@
   function updatePlanState() {
     const pending=!!currentData&&JSON.stringify(readForm())!==JSON.stringify(currentData)&&profileDraft;
     $('plan-pending').hidden=!pending;
-    $('plan-badge').textContent=exampleMode?'示例计划':currentData?'按你的资料生成':'尚未生成';
-    $('plan-caption').textContent=exampleMode?'示例建议，请按自己的资料重新生成。':pending?'资料已修改，重新生成后才会更新建议。':'先找到能坚持的节奏，再把变化记下来。';
+    $('plan-badge').hidden=!exampleMode;
     $('return-plan').hidden=!currentData;
     $('update-plan').firstChild.nodeValue=currentData&&!exampleMode?'重新生成计划 ':'生成我的计划 ';
     const latest=state.records.at(-1);
-    $('overview-record-note').textContent=latest?`最近一次：${latest.date}，${latest.weight.toFixed(1)} kg。查看你的实际记录与变化。`:'还没有体重记录，先记下第一次体重吧。';
+    $('overview-record-note').textContent=latest?`最近一次：${latest.date} · ${latest.weight.toFixed(1)} kg`:'还没有体重记录';
   }
   function refresh() {
     $('plan-content').hidden=!currentData;$('plan-empty').hidden=!!currentData;$('week').hidden=!currentData;$('week-empty').hidden=!!currentData;
@@ -132,7 +131,7 @@
     for(const button of document.querySelectorAll('[data-step-target]')){if(button.dataset.stepTarget===route.step)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');}
     for(const link of document.querySelectorAll('a[href^="#/"]')){if(link.getAttribute('href')===route.hash)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
     $('previous-profile').hidden=route.step==='basic';$('next-profile').hidden=route.step==='health';$('update-plan').hidden=route.step!=='health';
-    const titles={overview:'你的轻盈计划',week:'饮食与运动',records:'记录与回顾'};
+    const titles={overview:'计划总览',week:'饮食与运动',records:'记录回顾'};
     $('plan-view-title').textContent=titles[route.panel]||titles.overview;
     document.querySelector('.mobile-edit').hidden=route.screen!=='plan';
     document.querySelector('.mobile-menu').open=false;
